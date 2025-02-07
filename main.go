@@ -3,21 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-)
+	"os"
+	"strings"
 
-/*
-TODO:
- 1. Define the flags:
-    - dry run
-    - input file
-    - auto-accept changes (--yes|-y)
- 2. Get a list of services from the compose file
- 3. Check what version of an the images is
- 4. Check what version of the image is available
-    - is it possible to get the repo used for the image?
- 5. Ask user if they want to update the image
- 6. Write changes to the compose file
-*/
+	"gopkg.in/yaml.v3"
+)
 
 type UpdockConfig struct {
 	dryRun    bool
@@ -27,13 +17,49 @@ type UpdockConfig struct {
 
 type UpdockCli struct {
 	config UpdockConfig
+	services []ComposeService
+}
+
+type ComposeService struct {
+	name string
+	tag string
+	latest string
+}
+
+func (compose ComposeService) String() string {
+	return fmt.Sprintf("ComposeService{ name: %s, tag: %s, latest: %s }",
+		compose.name,
+		compose.tag,
+		compose.latest)
+}
+
+type ComposeConfig struct {
+	services map[string]struct {
+		image string `yaml:"image"`
+	} `yaml:"services"`
 }
 
 func (cli UpdockCli) String() string {
-	return fmt.Sprintf("UpdockCli{dryRun: %t, accept: %t, inputFile: %s}",
-		cli.config.dryRun,
-		cli.config.accept,
-		cli.config.inputFile)
+	svcs := make([]string, len(cli.services))
+	for i, svc := range cli.services {
+		svcs[i] = svc.String()
+	}
+	return fmt.Sprintf("UpdockCli{services: %s}",
+		strings.Join(svcs, ", "))
+}
+
+func (cli *UpdockCli) readComposeConfig(compose ComposeConfig) {
+	for _, service := range compose.services {
+		s := strings.Split(service.image, ":")
+		name := s[0]
+		tag := s[1]
+
+		cli.services = append(cli.services, ComposeService{
+			name: name,
+			tag: tag,
+			latest: "",
+		})
+	}
 }
 
 func main() {
@@ -43,17 +69,31 @@ func main() {
 
 	flag.Parse()
 
-	fmt.Println("Hello, World from Updock!")
-
 	cmd := UpdockConfig{
 		dryRun:    *dryRun,
 		accept:    *accept,
 		inputFile: *inputFile,
 	}
 
+	file, err := os.ReadFile(cmd.inputFile); if err != nil {
+		fmt.Println("Error reading file", err)
+		return
+	}
+
+	var compose ComposeConfig
+	err = yaml.Unmarshal(file, &compose); if err != nil {
+		fmt.Println("Error unmarshalling file", err)
+		return
+	}
+
+	fmt.Println(compose)
+
 	updock := UpdockCli{
 		config: cmd,
+		services: make([]ComposeService, len(compose.services)),
 	}
+
+	updock.readComposeConfig(compose)
 
 	fmt.Println(updock)
 }
