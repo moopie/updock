@@ -34,9 +34,12 @@ func (compose ComposeService) String() string {
 }
 
 type ComposeConfig struct {
-	services map[string]struct {
-		image string `yaml:"image"`
-	} `yaml:"services"`
+	Version string `yaml:"version"`
+	Services map[string]ComposeConfigService `yaml:"services"`
+}
+
+type ComposeConfigService struct {
+	Image string `yaml:"image"`
 }
 
 func (cli UpdockCli) String() string {
@@ -49,8 +52,8 @@ func (cli UpdockCli) String() string {
 }
 
 func (cli *UpdockCli) readComposeConfig(compose ComposeConfig) {
-	for _, service := range compose.services {
-		s := strings.Split(service.image, ":")
+	for _, service := range compose.Services {
+		s := strings.Split(service.Image, ":")
 		name := s[0]
 		tag := s[1]
 
@@ -90,7 +93,7 @@ func main() {
 
 	updock := UpdockCli{
 		config: cmd,
-		services: make([]ComposeService, len(compose.services)),
+		services: make([]ComposeService, 0),
 	}
 
 	updock.readComposeConfig(compose)
