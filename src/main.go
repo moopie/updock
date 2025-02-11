@@ -24,13 +24,15 @@ type ComposeService struct {
 	name string
 	tag string
 	latest string
+	registry string
 }
 
 func (compose ComposeService) String() string {
-	return fmt.Sprintf("ComposeService{ name: %s, tag: %s, latest: %s }",
+	return fmt.Sprintf("ComposeService{ name: %s, tag: %s, latest: %s, registry: %s}",
 		compose.name,
 		compose.tag,
-		compose.latest)
+		compose.latest,
+		compose.registry)
 }
 
 type ComposeConfig struct {
@@ -53,15 +55,29 @@ func (cli UpdockCli) String() string {
 
 func (cli *UpdockCli) readComposeConfig(compose ComposeConfig) {
 	for _, service := range compose.Services {
-		s := strings.Split(service.Image, ":")
-		name := s[0]
-		tag := s[1]
+		nameParts := strings.Split(service.Image, ":")
+		name := nameParts[0]
+		tag := nameParts[1]
+		reg := "docker.io"
 
+		slashCount := strings.Count(name, "/")
+		switch slashCount {
+		case 2:
+			names := strings.Split(name, "/")
+			reg = names[0]
+			name = names[1] + "/" + names[2]
+		}
 		cli.services = append(cli.services, ComposeService{
 			name: name,
 			tag: tag,
-			latest: "",
+			registry: reg,
 		})
+	}
+}
+
+func (cli *UpdockCli) getLatestTag() {
+	for _, svc := range cli.services {
+		fmt.Printf("%s\t%s\t\t:: %s\n", svc.name, svc.tag, svc.registry)
 	}
 }
 
@@ -89,8 +105,6 @@ func main() {
 		return
 	}
 
-	fmt.Println(compose)
-
 	updock := UpdockCli{
 		config: cmd,
 		services: make([]ComposeService, 0),
@@ -98,5 +112,5 @@ func main() {
 
 	updock.readComposeConfig(compose)
 
-	fmt.Println(updock)
+	updock.getLatestTag()
 }
