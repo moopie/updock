@@ -48,12 +48,12 @@ type ComposeConfigService struct {
 }
 
 func (cli UpdockCli) String() string {
-	svcs := make([]string, len(cli.services))
-	for i, svc := range cli.services {
-		svcs[i] = svc.String()
+	services := make([]string, len(cli.services))
+	for i, service := range cli.services {
+		services[i] = service.String()
 	}
 	return fmt.Sprintf("UpdockCli{services: %s}",
-		strings.Join(svcs, ", "))
+		strings.Join(services, ", "))
 }
 
 func (cli *UpdockCli) readComposeConfig(compose ComposeConfig) {
@@ -167,7 +167,7 @@ func main() {
 
 	var compose ComposeConfig
 	err = yaml.Unmarshal(file, &compose); if err != nil {
-		fmt.Println("Error unmarshalling file", err)
+		fmt.Println("Error decoding YAML", err)
 		return
 	}
 
