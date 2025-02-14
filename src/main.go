@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 
@@ -74,10 +77,73 @@ func (cli *UpdockCli) readComposeConfig(compose ComposeConfig) {
 		})
 	}
 }
+type DockerTagResponse struct {
+	Results []struct {
+		Name   string `json:"name"`
+		Images []struct {
+			Digest    string `json:"digest"`
+			OS        string `json:"os"`
+			Arch      string `json:"architecture"`
+			CreatedAt string `json:"last_pushed"`
+		} `json:"images"`
+	} `json:"results"`
+}
 
 func (cli *UpdockCli) getLatestTag() {
-	for _, svc := range cli.services {
-		fmt.Printf("%s\t%s\t\t:: %s\n", svc.name, svc.tag, svc.registry)
+	for i, svc := range cli.services {
+		fmt.Printf("[%s] %s:%s\n", svc.registry, svc.name, svc.tag)
+
+		// TODO: support other registries
+		if svc.registry != "docker.io" {
+			fmt.Println("!!~ Only docker.io is supported for now")
+			continue
+		}
+
+		url := "https://hub.docker.com/v2/repositories/%s/tags/?page_size=50"
+		fullUrl := fmt.Sprintf(url, svc.name)
+
+		fmt.Printf("url: %s\n", fullUrl)
+
+		res, err := http.Get(fullUrl); if err != nil {
+			fmt.Printf("Error getting tags for %s: %v\n", svc.name, err)
+			os.Exit(1)
+		}
+
+		body, err := io.ReadAll(res.Body); if err != nil {
+			fmt.Printf("Error reading response body: %v\n", err)
+			os.Exit(1)
+		}
+
+		var tagData DockerTagResponse
+		if err := json.Unmarshal(body, &tagData); err != nil {
+			fmt.Println("Error decoding JSON:", err)
+			os.Exit(1)
+		}
+
+		for _, tag := range tagData.Results {
+			if tag.Name != svc.tag || len(tag.Images) == 0 {
+				continue
+			}
+
+			fmt.Println("Tag Digest:", tag.Images[0].Digest)
+			fmt.Println("Platform:", tag.Images[0].OS, tag.Images[0].Arch)
+			fmt.Println("Created At:", tag.Images[0].CreatedAt)
+
+			latestDigest := tag.Images[0].Digest
+
+			if tag.Name == "latest" {
+				fmt.Printf("Looking up for latest tag\n")
+				// Step 2: Find another tag with the same digest
+				for _, secondTag := range tagData.Results {
+					if secondTag.Name != "latest" &&
+					   len(secondTag.Images) > 0 &&
+					   secondTag.Images[0].Digest == latestDigest {
+						fmt.Println("The 'latest' tag points to version:", secondTag.Name)
+						cli.services[i].latest = secondTag.Name
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -95,7 +161,7 @@ func main() {
 	}
 
 	file, err := os.ReadFile(cmd.inputFile); if err != nil {
-		fmt.Println("Error reading file", err)
+		fmt.Printf("Error reading file %s: %v\n", cmd.inputFile, err)
 		return
 	}
 
